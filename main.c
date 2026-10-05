@@ -73,8 +73,8 @@ static void receive_seq_events(snd_seq_t *seq)
             case SND_SEQ_EVENT_NOTEON:
             case SND_SEQ_EVENT_NOTEOFF:
                 onoff = ev->type == SND_SEQ_EVENT_NOTEON ? "ON" : "OFF";
-                printf("NOTE %s: ch=%d note=%d velocity=%d\n", onoff, ev->data.note.channel, ev->data.note.note, ev->data.note.velocity, 0);
-                me.type == SND_SEQ_EVENT_NOTEON ? 0 : 1; 
+                printf("[SEQ] NOTE %s: ch=%d note=%d velocity=%d\n", onoff, ev->data.note.channel, ev->data.note.note, ev->data.note.velocity, 0);
+                me.type = ev->type == SND_SEQ_EVENT_NOTEON ? 0 : 1; 
                 me.channel = ev->data.note.channel; 
                 me.note = ev->data.note.note; 
                 me.velocity = ev->data.note.velocity, 
@@ -82,7 +82,7 @@ static void receive_seq_events(snd_seq_t *seq)
                 push_midi_evt(&me); 
                 break;
             case SND_SEQ_EVENT_PITCHBEND:
-                printf("PITCH BEND: ch=%d value=%d\n", ev->data.control.channel, ev->data.control.value);
+                printf("[SEQ] PITCH BEND: ch=%d value=%d\n", ev->data.control.channel, ev->data.control.value);
                 me.type = 2; 
                 me.channel = ev->data.control.channel; 
                 me.value = ev->data.control.value;
@@ -90,7 +90,7 @@ static void receive_seq_events(snd_seq_t *seq)
                 break;
             default:
                 event_count = MAX_SEQ_EVTS;
-                printf("UNKNOWN_CTRL: id=%d ch=%d value=%d\n", ev->type, ev->data.control.channel, ev->data.control.value);
+                printf("[SEQ] UNKNOWN_CTRL: id=%d ch=%d value=%d\n", ev->type, ev->data.control.channel, ev->data.control.value);
                 me.type = 3;
                 push_midi_evt(&me);
                 break;

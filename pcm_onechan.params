@@ -1,0 +1,28 @@
+--- snd_pcm_hw_params ---
+ACCESS:  RW_INTERLEAVED
+FORMAT:  S16_LE
+SUBFORMAT:  STD
+SAMPLE_BITS: 16
+FRAME_BITS: 16
+CHANNELS: 1
+RATE: 44100
+PERIOD_TIME: 100000
+PERIOD_SIZE: 4410
+PERIOD_BYTES: 8820
+PERIODS: 5
+BUFFER_TIME: 500000
+BUFFER_SIZE: 22050
+BUFFER_BYTES: 44100
+TICK_TIME: 0
+-------------------------
+--- snd_pcm_sw_params ---
+tstamp_mode: NONE
+tstamp_type: MONOTONIC
+period_step: 1
+avail_min: 4410
+start_threshold: 22050
+stop_threshold: 22050
+silence_threshold: 0
+silence_size: 0
+boundary: 1445068800
+-------------------------
