@@ -40,16 +40,16 @@ int init_synth(void) {
     
     bytes_per_sample = snd_pcm_format_width(format) / 8;
     max_sample_val = (1 << snd_pcm_format_width(format) - 1) - 1;
-    
+    attack_step  = 1. / (rate / attack_time_secs); 
+    decay_step   = 1. / (rate / decay_time_secs);
+    release_step = 1. / (rate / release_time_secs);
+
     printf("[SYNTH] Initializing %d voices...\n", MAX_VOICES);
     for (int i = 0; i < MAX_VOICES; i++) {
         int relative_note = i - midi_note_a;
         voices[i].freq = note_a_freq * pow(2.0, relative_note / octave);
         voices[i].phase_step = max_phase * voices[i].freq / rate;
-        voices[i].attack_phase = 0;
-        voices[i].attack_phase_step = max_attack_phase * attack_freq / rate;
-        voices[i].decay_phase = M_PI * 0.5;
-        voices[i].decay_phase_step = max_attack_phase * decay_freq / rate; 
+        voices[i].adsr_type = IDLE;
     }
     printf("[SYNTH] %d voices initialized.\n", MAX_VOICES);
     
@@ -71,60 +71,64 @@ static double map_value(double in_start, double in_end, double out_start, double
     return ((value - in_start)/(in_end - in_start) * (out_end - out_start) + out_start);
 }
 
-static double normal_phase(double phase) {
-    return map_value(-1., 1., 0., 1., phase);
-}
-            
 void *midi_evt_handler(void *arg) {
     double sample = 0.0;
     unsigned short voice_count = 0;
-    double norm_attack_phase = 0.;
-    double norm_decay_phase = 0.;
     while(1) {
         MidiEvent me;
         if (spsc_pop(&midi_evt_buf, &me, sizeof(me))) {
             if (me.type == 3) {
                 break;
             }
-            voices[me.note].active = me.type == NOTE_ON ? 1 : 0;
-            voices[me.note].amplitude = me.velocity / 127.0;
-            voices[me.note].attack_phase = -1.;
-            voices[me.note].decay_phase = M_PI * .5;
-            printf("[SYNTH] freq: %f, phase_step: %f, phase: %f, decay_phase: %f, decay_phase_step: %f\n", 
-                    voices[me.note].freq, voices[me.note].phase_step, voices[me.note].phase,
-                    voices[me.note].decay_phase, voices[me.note].decay_phase_step);
+            switch(me.type) {
+                case NOTE_ON:
+                    voices[me.note].adsr_type = ATTACK;
+                    voices[me.note].gain = min_gain;
+                    voices[me.note].amplitude = me.velocity / 127.0;
+                    break;
+                case NOTE_OFF:
+                    voices[me.note].adsr_type = RELEASE;
+                    voices[me.note].gain = sustain_gain;
+                    break;
+                default:
+                    break;
+            }
          }
          for (int i = 0; i < period_size; i++) {
             sample = 0.0;
-            voice_count = 0;
             for (int j = 0; j < MAX_VOICES; j++) {
-                if (voices[j].active) {
-                    voice_count++;
-                    norm_attack_phase = normal_phase(sin(voices[j].attack_phase)); 
-                    sample += sin(voices[j].phase) * voices[j].amplitude * norm_attack_phase;
+                if (voices[j].adsr_type != IDLE) {
+                    sin(voices[j].phase) * voices[j].amplitude * voices[j].gain;
                     voices[j].phase += voices[j].phase_step;
-                    voices[j].attack_phase += voices[j].attack_phase_step;
-                    if (voices[j].phase >= max_phase) {
-                        voices[j].phase -= max_phase;
-                    }
-                    if (voices[j].attack_phase >= max_attack_phase) {
-                         voices[j].attack_phase = max_attack_phase;
+                    switch(voices[j].adsr_type) {
+                        case ATTACK:
+                            voices[j].gain += attack_step;
+                            if (voices[j].gain> max_gain) {
+                                voices[j].adsr_type = DECAY;
+                            }
+                            break;
+                        case DECAY:
+                            voices[j].gain -= decay_step;
+                            if (voices[j].gain <= sustain_gain) {
+                                voices[j].adsr_type = SUSTAIN;
+                            }
+                            break;
+                        case RELEASE:
+                            voices[j].gain -= release_step;
+                            if (voices[j].gain <= min_gain) {
+                                voices[j].adsr_type = IDLE;
+                            } 
+                            break;
+                        default:
+                            break;
                     }
 
-                } else if (voices[j].decay_phase > 0.) {
-                    // printf("voice[%d].decay_phase = %f\n", j, voices[j].decay_phase);
-                    voice_count++;
-                    norm_decay_phase = normal_phase(sin(voices[j].decay_phase));
-                    sample += sin(voices[j].phase) * voices[j].amplitude * norm_decay_phase;
-                    voices[j].phase += voices[j].phase_step;
-                    voices[j].decay_phase -= voices[j].decay_phase_step;
                     if (voices[j].phase >= max_phase) {
                         voices[j].phase -= max_phase;
                     }
                 }
             }
             samples[i] = (signed short)(tanh(sample) * max_sample_val);
-            // samples[i] = (signed short)(sample * max_sample_val / voice_count);
         }
         int err = snd_pcm_writei(pcm_handle, (void *)samples, period_size);
         if (err == -EAGAIN) {
@@ -133,8 +137,6 @@ void *midi_evt_handler(void *arg) {
             fprintf(stderr, "%s\n", snd_strerror(err));
         }
     }
-    // snd_pcm_hw_params_free(hwparams); only necessary of params were malloc'ed note alloca'ed
-    // snd_pcm_sw_params_free(swparams);
     free(areas);
     free(samples);
     snd_pcm_close(pcm_handle);
