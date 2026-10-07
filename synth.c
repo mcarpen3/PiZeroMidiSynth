@@ -40,10 +40,10 @@ int init_synth(void) {
     
     bytes_per_sample = snd_pcm_format_width(format) / 8;
     max_sample_val = (1 << snd_pcm_format_width(format) - 1) - 1;
-    attack_step  = 1. / (rate / attack_time_secs); 
-    decay_step   = 1. / (rate / decay_time_secs);
-    release_step = 1. / (rate / release_time_secs);
-
+    attack_step  = 1 / attack_time_secs / rate;
+    decay_step   = 1 / decay_time_secs / rate;
+    release_step = 1 / release_time_secs / rate;
+    printf("[SYNTH] attack_step: %f, decay_step: %f, release_step: %f\n", attack_step, decay_step, release_step);
     printf("[SYNTH] Initializing %d voices...\n", MAX_VOICES);
     for (int i = 0; i < MAX_VOICES; i++) {
         int relative_note = i - midi_note_a;
@@ -74,6 +74,8 @@ static double map_value(double in_start, double in_end, double out_start, double
 void *midi_evt_handler(void *arg) {
     double sample = 0.0;
     unsigned short voice_count = 0;
+    struct timespec start, end;
+    size_t count = 0;
     while(1) {
         MidiEvent me;
         if (spsc_pop(&midi_evt_buf, &me, sizeof(me))) {
@@ -98,12 +100,12 @@ void *midi_evt_handler(void *arg) {
             sample = 0.0;
             for (int j = 0; j < MAX_VOICES; j++) {
                 if (voices[j].adsr_type != IDLE) {
-                    sin(voices[j].phase) * voices[j].amplitude * voices[j].gain;
+                    sample += sin(voices[j].phase) * voices[j].amplitude * voices[j].gain;
                     voices[j].phase += voices[j].phase_step;
                     switch(voices[j].adsr_type) {
                         case ATTACK:
                             voices[j].gain += attack_step;
-                            if (voices[j].gain> max_gain) {
+                            if (voices[j].gain >= max_gain) {
                                 voices[j].adsr_type = DECAY;
                             }
                             break;
@@ -130,8 +132,10 @@ void *midi_evt_handler(void *arg) {
             }
             samples[i] = (signed short)(tanh(sample) * max_sample_val);
         }
+
         int err = snd_pcm_writei(pcm_handle, (void *)samples, period_size);
         if (err == -EAGAIN) {
+            printf("continue\n");
             continue;
         } else if (err < 0) {
             fprintf(stderr, "%s\n", snd_strerror(err));
