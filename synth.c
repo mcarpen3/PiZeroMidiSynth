@@ -95,6 +95,7 @@ void *midi_evt_handler(void *arg) {
                 default:
                     break;
             }
+            printf("[SYNTH] NOTE#=%d\n", me.note);
          }
          for (int i = 0; i < period_size; i++) {
             sample = 0.0;

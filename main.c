@@ -4,58 +4,56 @@
 #include <pthread.h>
 #include <math.h>
 #include "synth.h"
+#include <unistd.h>
+#include <fcntl.h>
+#include <linux/input.h>
+
 #define MAX_SEQ_EVTS 1024
 
 static void receive_seq_events(snd_seq_t *seq);
-int main(void)
-{
-    int rc, err, port, seq_client_id;
-    const char *seq_name;
-    printf("hello, world of synths\n");
-    snd_seq_t *seq_handle;
-    pthread_t synth_thread;
-    const char *keyboard = "Keystation 61 MK3";
+static void std_keyboard_event_handler();
+static int sequencer_client_setup(snd_seq_t *handle);
 
-    rc = snd_seq_open(&seq_handle, "default", SND_SEQ_OPEN_INPUT, 0);
-    snd_seq_set_client_name(seq_handle, "MySynth");
-    port = snd_seq_create_simple_port(seq_handle, "MIDI Input", SND_SEQ_PORT_CAP_WRITE | SND_SEQ_PORT_CAP_SUBS_WRITE, SND_SEQ_PORT_TYPE_APPLICATION);
-    if (port < 0) {
-        fprintf(stderr, "Failed to create sequencer port: %s\n", snd_strerror(port));
-        return 1;
+int main(int argc, char *argv[])
+{
+    int rc, port, use_midi=1;
+    const char *seq_name;
+    printf("Hello, world of Midi and Synths!!!\n");
+    snd_seq_t *seq_handle = NULL;
+    pthread_t synth_thread;
+
+    if (argc == 2) {
+        use_midi = 0;
+        printf("Using standard computer keyboard\n");
+    } else if ((rc = sequencer_client_setup(seq_handle)) != 0) {
+        fprintf(stderr, "Failed to create sequencer client: %s\n", snd_strerror(rc));
+        goto clean_up;
     } else {
-        printf("My port = %d\n", port);
+        printf("Using Keystation 61 MK3\n");
     }
-    
-    if (rc != 0)
-    {
-        perror(strerror(errno));
-        return 1;
-    } else {
-        printf("snd_seq_open'd\n");
-    }
-    
-    seq_name = snd_seq_name(seq_handle);
-    seq_client_id = snd_seq_client_id(seq_handle);
-    printf("snd_seq_id = %d\nsnd_seq_name = %s\n", seq_client_id, seq_name);
-   
-    err = snd_seq_connect_from(seq_handle, port, 20, 0);
-    if (err < 0)
-    {
-        fprintf(stderr, "Cannot connect MIDI Input: %s\n", snd_strerror(err));
-        return 1;
-    } else {
-        printf("sequencer connected to MIDI %s\n", seq_name);
-    }
-    
-    if ((err = init_synth()) != 0) {
-        fprintf(stderr, "init_synth failed %d\n", err);
+
+    if ((rc = init_synth()) != 0) {
+        fprintf(stderr, "init_synth failed %s\n", snd_strerror(rc));
         goto clean_up;
     }
-    pthread_create(&synth_thread, NULL, midi_evt_handler, NULL);
-    receive_seq_events(seq_handle);
+    
+    if ((rc = pthread_create(&synth_thread, NULL, midi_evt_handler, NULL) != 0)) {
+        goto clean_up;
+    }
+
+        
+    if (use_midi) {
+        receive_seq_events(seq_handle);
+    } else {
+        std_keyboard_event_handler();
+    }
+
     pthread_join(synth_thread, NULL);
 clean_up:
-    snd_seq_close(seq_handle);
+    if (seq_handle) {
+        snd_seq_close(seq_handle);
+        printf("Midi sequencer handle closed\n");
+    }
     return 0;
 }
 
@@ -63,17 +61,17 @@ static void receive_seq_events(snd_seq_t *seq)
 {
     snd_seq_event_t *ev;
     int event_count = 0;
+    MidiEvent me = {0};
 
     while (snd_seq_event_input(seq, &ev) >= 0 && event_count < MAX_SEQ_EVTS)
     {
         char *onoff;
-        MidiEvent me = {0};
         switch(ev->type)
         {
             case SND_SEQ_EVENT_NOTEON:
             case SND_SEQ_EVENT_NOTEOFF:
                 onoff = ev->type == SND_SEQ_EVENT_NOTEON ? "ON" : "OFF";
-                printf("[SEQ] NOTE %s: ch=%d note=%d velocity=%d\n", onoff, ev->data.note.channel, ev->data.note.note, ev->data.note.velocity, 0);
+                printf("[SEQ] NOTE %s: ch=%d note=%d velocity=%d\n", onoff, ev->data.note.channel, ev->data.note.note, ev->data.note.velocity);
                 me.type = ev->type == SND_SEQ_EVENT_NOTEON ? 0 : 1; 
                 me.channel = ev->data.note.channel; 
                 me.note = ev->data.note.note; 
@@ -97,3 +95,72 @@ static void receive_seq_events(snd_seq_t *seq)
         }
     }
 }
+
+static void std_keyboard_event_handler() {
+    const char *input_device = "/dev/input/event2";
+    int fd = open(input_device, O_RDONLY);
+    if (fd == -1) {
+        perror("Failed to open input device ");
+        return;
+    }
+    struct input_event ev;
+    MidiEvent me = {0};
+    while(1) {
+        read(fd, &ev, sizeof(struct input_event));
+        
+        if (ev.type == EV_KEY && ev.value <= 1) {
+            me.type = ev.code == 1 
+                ? 3 
+                : ev.value == 1 ? 0 : 1;
+            me.channel = 0;
+            me.note = ev.code + 32;
+            me.velocity = 80; 
+            me.value = 0;
+            push_midi_evt(&me);
+            if (ev.code == 1) {
+                break;
+            }
+        }
+    }
+    close(fd);
+    return;
+}
+
+static int sequencer_client_setup(snd_seq_t *handle) {
+    int rc, port, seq_client_id;
+    const char *seq_name;
+    // Try and get a handle on the ALSA system's default MIDI sequencer handle
+    // When my M-AUDIO Keystation 61 is connected, an alsa sequencer driver is attached TODO learn more about snd_usb_audio driver   
+    // command-lines like "aseqdump -l" and "aseqdump -p <portnum of midi device>" are useful tools
+    rc = snd_seq_open(&handle, "default", SND_SEQ_OPEN_INPUT, 0);
+    if (rc != 0) {
+        return rc;
+    } else {
+        printf("snd_seq_open'd\n");
+    }
+
+    // Sequencer client setup
+    // The bitwise flags specify what other sequencers have the capability to do
+    // Assuming these client setup routines succeed, then running "aconnect -l" in another terminal will show the client registered on the ALSA sequencer
+    snd_seq_set_client_name(handle, "MySynth");
+    port = snd_seq_create_simple_port(handle, "MIDI Input", SND_SEQ_PORT_CAP_WRITE | SND_SEQ_PORT_CAP_SUBS_WRITE, SND_SEQ_PORT_TYPE_APPLICATION);
+    if (port < 0) {
+        return port;
+    } else {
+        printf("Midi sequencer port = %d\n", port);
+    }
+    
+    seq_name = snd_seq_name(handle);
+    seq_client_id = snd_seq_client_id(handle);
+    printf("snd_seq_id = %d\nsnd_seq_name = %s\n", seq_client_id, seq_name);
+   
+    rc = snd_seq_connect_from(handle, port, 20, 0);
+    if (rc < 0)
+    {
+        return rc;
+    } else {
+        printf("Midi sequencer connected to %s\n", seq_name);
+    }
+    return 0;
+}
+

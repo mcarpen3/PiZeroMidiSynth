@@ -2,7 +2,7 @@ BUILD_DIR=build/
 
 
 seqsynth: main.c synth.o spsc_ring_buffer.o 
-	gcc -ggdb -o $(BUILD_DIR)seqsynth main.c \
+	gcc -ggdb -Wall -Wextra -Wno-unused-variable -o $(BUILD_DIR)seqsynth main.c \
 		$(BUILD_DIR)synth.o $(BUILD_DIR)spsc_ring_buffer.o -lasound -pthread -lm
 synth.o: synth.c synth.h
 	gcc -ggdb -c synth.c -o $(BUILD_DIR)synth.o
@@ -23,7 +23,7 @@ clean:
 build_and_run: seqsynth
 	build/seqsynth
 run:
-	build/seqsynth
+	build/seqsynth $(ARGS)
 debug:
 	gdb build/seqsynth
 run_test_pcm:
