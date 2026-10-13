@@ -1,4 +1,10 @@
 #include "./synth.h"
+static int xrun_recovery(snd_pcm_t *handle, int err);
+static void print_snd_pcm_hwparams(snd_pcm_hw_params_t *params);
+static void print_snd_pcm_swparams(snd_pcm_sw_params_t *params);
+static int set_hwparams(snd_pcm_t *handle, snd_pcm_hw_params_t *params, snd_pcm_access_t access);
+static int set_swparams(snd_pcm_t *handle, snd_pcm_sw_params_t *params);
+
 
 int init_synth(void) {
     int err;
@@ -43,16 +49,24 @@ int init_synth(void) {
     attack_step  = 1 / attack_time_secs / rate;
     decay_step   = 1 / decay_time_secs / rate;
     release_step = 1 / release_time_secs / rate;
+    tempo_step   = 1 / (tempo_bpm / 120.) / rate;
     printf("[SYNTH] attack_step: %f, decay_step: %f, release_step: %f\n", attack_step, decay_step, release_step);
-    printf("[SYNTH] Initializing %d voices...\n", MAX_VOICES);
-    for (int i = 0; i < MAX_VOICES; i++) {
-        int relative_note = i - midi_note_a;
+    printf("[SYNTH] Initializing %d voices...\n", MAX_NOTES);
+    for (uint8_t i = 0; i < MAX_NOTES; i++) {
+        int relative_note = (int)i - midi_note_a;
         voices[i].freq = note_a_freq * pow(2.0, relative_note / octave);
         voices[i].phase_step = max_phase * voices[i].freq / rate;
         voices[i].adsr_type = IDLE;
+        voices[i].gain = min_gain;
     }
-    printf("[SYNTH] %d voices initialized.\n", MAX_VOICES);
-    
+    tempo.adsr_type = IDLE;
+    tempo.gain      = 0.;
+    tempo.phase     = 0.;
+
+    printf("[SYNTH] %d NOTES initialized.\n", MAX_NOTES);
+    printf("[SYNTH] intializing active voice LIST\n");
+    list = malloc(sizeof(DList));
+    dlist_init(list, NULL);
     print_snd_pcm_hwparams(hwparams);
     print_snd_pcm_swparams(swparams);
     printf("MAX_SAMPLE_VAL: %d\n", max_sample_val);
@@ -73,9 +87,10 @@ static double map_value(double in_start, double in_end, double out_start, double
 
 void *midi_evt_handler(void *arg) {
     double sample = 0.0;
-    unsigned short voice_count = 0;
     struct timespec start, end;
-    size_t count = 0;
+    DListElmt *list_el; 
+    Voice *cur_voice;
+
     while(1) {
         MidiEvent me;
         if (spsc_pop(&midi_evt_buf, &me, sizeof(me))) {
@@ -84,52 +99,68 @@ void *midi_evt_handler(void *arg) {
             }
             switch(me.type) {
                 case NOTE_ON:
+                    if (dlist_size(list) == MAX_VOICES) {
+                        break;
+                    } else if (voices[me.note].adsr_type == IDLE) {
+                        dlist_ins_next(list, dlist_tail(list), &voices[me.note]);
+                    }
                     voices[me.note].adsr_type = ATTACK;
                     voices[me.note].gain = min_gain;
                     voices[me.note].amplitude = me.velocity / 127.0;
                     break;
                 case NOTE_OFF:
-                    voices[me.note].adsr_type = RELEASE;
-                    voices[me.note].gain = sustain_gain;
+                    if (voices[me.note].adsr_type != IDLE) {
+                        voices[me.note].adsr_type = RELEASE;
+                        voices[me.note].gain = sustain_gain;
+                    }
                     break;
                 default:
                     break;
             }
-            printf("[SYNTH] NOTE#=%d\n", me.note);
+            if (verbose) 
+                printf("[SYNTH] NOTE#=%d VOICE_COUNT=%u VOICE_ADSR=%d\n", me.note, dlist_size(list), voices[me.note].adsr_type);
          }
          for (int i = 0; i < period_size; i++) {
             sample = 0.0;
-            for (int j = 0; j < MAX_VOICES; j++) {
-                if (voices[j].adsr_type != IDLE) {
-                    sample += sin(voices[j].phase) * voices[j].amplitude * voices[j].gain;
-                    voices[j].phase += voices[j].phase_step;
-                    switch(voices[j].adsr_type) {
+            sample += fmin(1, fmax(-1., tan(tempo.phase)));
+            tempo.phase += tempo_step;
+            if (tempo.phase >= 1) tempo.phase = 0;
+            list_el = dlist_head(list);
+            while (list_el != NULL) {
+                cur_voice = (Voice *)dlist_data(list_el);
+                if (cur_voice->adsr_type != IDLE) {
+                    sample += sin(cur_voice->phase) * cur_voice->amplitude * cur_voice->gain;
+                    cur_voice->phase += cur_voice->phase_step;
+                    switch(cur_voice->adsr_type) {
                         case ATTACK:
-                            voices[j].gain += attack_step;
-                            if (voices[j].gain >= max_gain) {
-                                voices[j].adsr_type = DECAY;
+                            cur_voice->gain += attack_step;
+                            if (cur_voice->gain >= max_gain) {
+                                cur_voice->adsr_type = DECAY;
                             }
                             break;
                         case DECAY:
-                            voices[j].gain -= decay_step;
-                            if (voices[j].gain <= sustain_gain) {
-                                voices[j].adsr_type = SUSTAIN;
+                            cur_voice->gain -= decay_step;
+                            if (cur_voice->gain <= sustain_gain) {
+                                cur_voice->adsr_type = SUSTAIN;
                             }
                             break;
                         case RELEASE:
-                            voices[j].gain -= release_step;
-                            if (voices[j].gain <= min_gain) {
-                                voices[j].adsr_type = IDLE;
+                            cur_voice->gain -= release_step;
+                            if (cur_voice->gain <= min_gain) {
+                                cur_voice->adsr_type = IDLE;
+                                Voice *rem_voice;
+                                dlist_remove(list, list_el, (void **)&rem_voice);
                             } 
                             break;
                         default:
                             break;
                     }
-
-                    if (voices[j].phase >= max_phase) {
-                        voices[j].phase -= max_phase;
-                    }
                 }
+
+                if (cur_voice->phase >= max_phase) {
+                    cur_voice->phase -= max_phase;
+                }
+                list_el = dlist_next(list_el);
             }
             samples[i] = (signed short)(tanh(sample) * max_sample_val);
         }
@@ -138,15 +169,46 @@ void *midi_evt_handler(void *arg) {
         if (err == -EAGAIN) {
             printf("continue\n");
             continue;
-        } else if (err < 0) {
-            fprintf(stderr, "%s\n", snd_strerror(err));
+        } 
+        if (err < 0) {
+            if (xrun_recovery(pcm_handle, err) < 0) {
+                printf("Write error: %s\n", snd_strerror(err));
+                break;
+            }
+            continue;  /* skip one period */
         }
     }
     free(areas);
     free(samples);
     snd_pcm_close(pcm_handle);
     printf("freq_handler freed resources\n");
+    dlist_destroy(list);
     return NULL;
+}
+/*
+ *   Underrun and suspend recovery
+ */
+
+static int xrun_recovery(snd_pcm_t *handle, int err)
+{
+    if (verbose)
+        printf("stream recovery\n");
+    if (err == -EPIPE) {    /* under-run */
+        err = snd_pcm_prepare(handle);
+        if (err < 0)
+            printf("Can't recovery from underrun, prepare failed: %s\n", snd_strerror(err));
+        return 0;
+    } else if (err == -ESTRPIPE) {
+        while ((err = snd_pcm_resume(handle)) == -EAGAIN)
+            sleep(1);   /* wait until the suspend flag is released */
+        if (err < 0) {
+            err = snd_pcm_prepare(handle);
+            if (err < 0)
+                printf("Can't recovery from suspend, prepare failed: %s\n", snd_strerror(err));
+        }
+        return 0;
+    }
+    return err;
 }
 
 static void print_snd_pcm_hwparams(snd_pcm_hw_params_t *params)
