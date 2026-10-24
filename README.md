@@ -1,4 +1,3 @@
-# ALSA MIDI SYNTHESIZER
 - Read midi events from default midi device
   - Utilize a single producer, single consumer queue
   - Main thread reads midi events and produces key press events into the queue
@@ -11,10 +10,11 @@
 - Performance improvement via a doubly-linked list of currently-played voices
   - Linked list limited to 10-voice capacity
   - Linked list ensures fast iteration of active voices, and prevents pcm ring-buffer starvation
-- [Alsa PCM library documentation](https://www.alsa-project.org/alsa-doc/alsa-lib/pcm.html)
-- [Alsa sequencer library documentation](https://www.alsa-project.org/alsa-doc/alsa-lib/seq.html)
-- [My Midi Keyboard](https://www.m-audio.com/keyboard-controllers/keystation-61-mk3.html)
-- [Audio HAT](https://www.raspberrypi.com/products/codec-zero/)
+- <a href="https://www.alsa-project.org/alsa-doc/alsa-lib/pcm.html" target="_blank" rel="noopener noreferrer">Alsa PCM library documentation</a>
+- <a href="https://www.alsa-project.org/alsa-doc/alsa-lib/seq.html" target="_blank" rel="noopener noreferrer">Alsa sequencer library documentation</a>
+- <a href="https://www.m-audio.com/keyboard-controllers/keystation-61-mk3.html" target="_blank" rel="noopener noreferrer">My Midi Keyboard</a>
+- <a href="https://www.raspberrypi.com/products/codec-zero/" target="_blank" rel="noopener noreferrer">Audio HAT</a>
+- ![MySetup](./Setup.jpg)
 - ADSR (attack, decay, sustain, release) implemented linearly
 - TODO
   - Recording and loop playback
