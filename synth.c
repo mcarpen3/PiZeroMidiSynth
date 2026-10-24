@@ -2,6 +2,7 @@
 static int xrun_recovery(snd_pcm_t *handle, int err);
 static void print_snd_pcm_hwparams(snd_pcm_hw_params_t *params);
 static void print_snd_pcm_swparams(snd_pcm_sw_params_t *params);
+static void print_snd_pcm(snd_pcm_t *handle);
 static int set_hwparams(snd_pcm_t *handle, snd_pcm_hw_params_t *params, snd_pcm_access_t access);
 static int set_swparams(snd_pcm_t *handle, snd_pcm_sw_params_t *params);
 
@@ -67,12 +68,15 @@ int init_synth(void) {
     printf("[SYNTH] intializing active voice LIST\n");
     list = malloc(sizeof(DList));
     dlist_init(list, NULL);
-    print_snd_pcm_hwparams(hwparams);
-    print_snd_pcm_swparams(swparams);
-    printf("MAX_SAMPLE_VAL: %d\n", max_sample_val);
-    printf("SAMPLE FMT UNSIGNED: %s\n", snd_pcm_format_unsigned(format) ? "TRUE" : "FALSE");
-    printf("SAMPLE FMT BIGENDIAN: %s\n", snd_pcm_format_big_endian(format) ? "TRUE" : "FALSE");
-    printf("SAMPLE FMT FLOAT: %s\n", snd_pcm_format_big_endian(format) ? "TRUE" : "FALSE");
+    if (verbose) {
+        print_snd_pcm(pcm_handle);
+        print_snd_pcm_hwparams(hwparams);
+        print_snd_pcm_swparams(swparams);
+        printf("MAX_SAMPLE_VAL: %d\n", max_sample_val);
+        printf("SAMPLE FMT UNSIGNED: %s\n", snd_pcm_format_unsigned(format) ? "TRUE" : "FALSE");
+        printf("SAMPLE FMT BIGENDIAN: %s\n", snd_pcm_format_big_endian(format) ? "TRUE" : "FALSE");
+        printf("SAMPLE FMT FLOAT: %s\n", snd_pcm_format_big_endian(format) ? "TRUE" : "FALSE");
+    }
 
     return 0;
 }
@@ -83,6 +87,48 @@ bool push_midi_evt(MidiEvent *me) {
 
 static double map_value(double in_start, double in_end, double out_start, double out_end, double value) {
     return ((value - in_start)/(in_end - in_start) * (out_end - out_start) + out_start);
+}
+
+static double saw_tooth(double x) {
+    double a = abs(x);
+    int k = floor(x * M_PI / 2);
+    double v = x - k * M_PI * 0.5;
+    double y;
+    int quadrant = k % 4;
+    switch(quadrant) {
+        case 0:
+        case 2:
+            y = map_value(v, 0., M_PI / 2, 1., 0.);
+            break;
+        case 1:
+        case 3:
+            y = map_value(v, 0., M_PI / 2, 0, -1.);
+            break;
+    }
+    return x < 0 ? -y : y;
+}
+
+static double triangle_wave(double x) {
+    double a = abs(x);
+    int k = floor(x * M_PI / 2);
+    double v = x - k * M_PI * 0.5;
+    double y;
+    int quadrant = k % 4;
+    switch(quadrant) {
+        case 0:
+            y = map_value(v, 0., M_PI / 2, 0., -1.);
+            break;
+        case 1:
+            y = map_value(v, 0., M_PI / 2, -1., 0.);
+            break;
+        case 2:
+            y = map_value(v, 0., M_PI / 2, 0., 1.);
+            break;
+        case 3:
+            y = map_value(v, 0., M_PI / 2, 1., 0.);
+            break;
+    }
+    return x < 0 ? -y : y;
 }
 
 void *midi_evt_handler(void *arg) {
@@ -122,14 +168,16 @@ void *midi_evt_handler(void *arg) {
          }
          for (int i = 0; i < period_size; i++) {
             sample = 0.0;
-            sample += fmin(1, fmax(-1., tan(tempo.phase)));
+            // sample += fmin(1, fmax(-1., tan(tempo.phase)));
             tempo.phase += tempo_step;
             if (tempo.phase >= 1) tempo.phase = 0;
             list_el = dlist_head(list);
             while (list_el != NULL) {
                 cur_voice = (Voice *)dlist_data(list_el);
                 if (cur_voice->adsr_type != IDLE) {
-                    sample += sin(cur_voice->phase) * cur_voice->amplitude * cur_voice->gain;
+                    // sample += sin(cur_voice->phase) * cur_voice->amplitude * cur_voice->gain;
+                    // sample += saw_tooth(cur_voice->phase) * cur_voice->amplitude * cur_voice->gain;
+                    sample += triangle_wave(cur_voice->phase) * cur_voice->amplitude * cur_voice->gain;
                     cur_voice->phase += cur_voice->phase_step;
                     switch(cur_voice->adsr_type) {
                         case ATTACK:
@@ -229,6 +277,16 @@ static void print_snd_pcm_swparams(snd_pcm_sw_params_t *params) {
     snd_output_close(output);
     printf("-------------------------\n");
 }
+
+static void print_snd_pcm(snd_pcm_t *handle) {
+    printf("--- snd_pcm_dump ---\n");
+    snd_output_t *output;
+    snd_output_stdio_attach(&output, stdout, 0);
+    snd_pcm_dump(handle, output);
+    snd_output_close(output);
+    printf("-------------------------\n");
+}
+
 
 static int set_hwparams(snd_pcm_t *handle,
             snd_pcm_hw_params_t *params,

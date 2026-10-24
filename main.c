@@ -63,7 +63,8 @@ static void drain_seq_fifo_and_buffer(snd_seq_t *seq) {
     snd_seq_event_t *ev;
     // Drain the sequencer FIFO
     event_count = snd_seq_event_input_pending(seq, 1);
-    printf("[SEQ] Draining %d events in seq FIFO\n", event_count);
+    if (verbose)
+        printf("[SEQ] Draining %d events in seq FIFO\n", event_count);
     do {
         event_count = snd_seq_event_input_pending(seq, 0);
         printf("[SEQ] Draining %d bytes in seq buffer\n", event_count);
@@ -85,7 +86,8 @@ static void receive_seq_events(snd_seq_t *seq)
             case SND_SEQ_EVENT_NOTEON:
             case SND_SEQ_EVENT_NOTEOFF:
                 onoff = ev->type == SND_SEQ_EVENT_NOTEON ? "ON" : "OFF";
-                printf("[SEQ] NOTE %s: ch=%d note=%d velocity=%d\n", onoff, ev->data.note.channel, ev->data.note.note, ev->data.note.velocity);
+                if (verbose)
+                    printf("[SEQ] NOTE %s: ch=%d note=%d velocity=%d\n", onoff, ev->data.note.channel, ev->data.note.note, ev->data.note.velocity);
                 me.type = ev->type == SND_SEQ_EVENT_NOTEON ? 0 : 1; 
                 me.channel = ev->data.note.channel; 
                 me.note = ev->data.note.note; 
@@ -93,13 +95,15 @@ static void receive_seq_events(snd_seq_t *seq)
                 me.value = 0;
                 break;
             case SND_SEQ_EVENT_PITCHBEND:
-                printf("[SEQ] PITCH BEND: ch=%d value=%d\n", ev->data.control.channel, ev->data.control.value);
+                if (verbose)
+                    printf("[SEQ] PITCH BEND: ch=%d value=%d\n", ev->data.control.channel, ev->data.control.value);
                 me.type = 2; 
                 me.channel = ev->data.control.channel; 
                 me.value = ev->data.control.value;
                 break;
             default:
-                printf("[SEQ] UNKNOWN_CTRL: id=%d ch=%d value=%d\n", ev->type, ev->data.control.channel, ev->data.control.value);
+                if (verbose)
+                    printf("[SEQ] UNKNOWN_CTRL: id=%d ch=%d value=%d\n", ev->type, ev->data.control.channel, ev->data.control.value);
                 me.type = 3;
                 exit = 1;
                 break;

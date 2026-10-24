@@ -1,0 +1,16 @@
+# ALSA MIDI SYNTHESIZER
+- Read midi events from default midi device
+  - Utilize a single producer, single consumer queue
+  - Main thread reads midi events and produces key press events into the queue
+  - Synth thread consumes the key presses and synthesizes pcm sound waves
+    - Uses 440 * 2 ^ (69 - MIDIKEYCODE) / 12), i.e.: pow(2, (69 - MIDIKEYCODE) / 12.0), to compute frequency
+    - MIDIKEYCODE 69 corresponds to the middle-A on the MIDI keyboard, which is known to be 440.0Hz.
+    - The number 12.0 represents the number of semitones in an octave.
+- Synthesize a pcm audio signal
+  - Sawtooth, Triangle, and Sine wave variants
+- Performance improvement via a doubly-linked list of currently-played voices
+  - Linked list limited to 10-voice capacity
+  - Linked list ensures fast iteration of active voices, and prevents pcm ring-buffer starvation
+- [Alsa PCM library documentation](https://www.alsa-project.org/alsa-doc/alsa-lib/pcm.html)
+- [Alsa sequencer library documentation](https://www.alsa-project.org/alsa-doc/alsa-lib/seq.html)
+- [My Midi Keyboard](https://www.m-audio.com/keyboard-controllers/keystation-61-mk3.html)
