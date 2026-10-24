@@ -14,3 +14,7 @@
 - [Alsa PCM library documentation](https://www.alsa-project.org/alsa-doc/alsa-lib/pcm.html)
 - [Alsa sequencer library documentation](https://www.alsa-project.org/alsa-doc/alsa-lib/seq.html)
 - [My Midi Keyboard](https://www.m-audio.com/keyboard-controllers/keystation-61-mk3.html)
+- ADSR (attack, decay, sustain, release) implemented linearly
+- TODO
+  - Recording and loop playback
+  - Click track
