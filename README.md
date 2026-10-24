@@ -2,7 +2,8 @@
   - Utilize a single producer, single consumer queue
   - Main thread reads midi events and produces key press events into the queue
   - Synth thread consumes the key presses and synthesizes pcm sound waves
-    - Uses 440 * 2 ^ (69 - MIDIKEYCODE) / 12), i.e.: pow(2, (69 - MIDIKEYCODE) / 12.0), to compute frequency
+    - Uses 440 * 2 ^ (69 - MIDIKEYCODE) / 12)
+      - `440.0 * pow(2, (69 - MIDIKEYCODE) / 12.0)` to compute frequency
     - MIDIKEYCODE 69 corresponds to the middle-A on the MIDI keyboard, which is known to be 440.0Hz.
     - The number 12.0 represents the number of semitones in an octave.
 - Synthesize a pcm audio signal
