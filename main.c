@@ -34,15 +34,9 @@ int main(int argc, char *argv[])
         printf("Using Keystation 61 MK3\n");
     }
 
-    if ((rc = init_synth()) != 0) {
-        fprintf(stderr, "init_synth failed %s\n", snd_strerror(rc));
-        goto clean_up;
-    }
-    
     if ((rc = pthread_create(&synth_thread, NULL, midi_evt_handler, NULL) != 0)) {
         goto clean_up;
     }
-
         
     if (use_midi) {
         receive_seq_events(seq_handle);

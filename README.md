@@ -9,7 +9,7 @@
 - Synthesize a pcm audio signal
   - Sawtooth, Triangle, and Sine wave variants
 - Performance improvement via a doubly-linked list of currently-played voices
-  - Linked list limited to 10-voice capacity
+  - Linked list variable voice capacity
   - Linked list ensures fast iteration of active voices, and prevents pcm ring-buffer starvation
 - <a href="https://www.alsa-project.org/alsa-doc/alsa-lib/pcm.html" target="_blank" rel="noopener noreferrer">Alsa PCM library documentation</a>
 - <a href="https://www.alsa-project.org/alsa-doc/alsa-lib/seq.html" target="_blank" rel="noopener noreferrer">Alsa sequencer library documentation</a>
