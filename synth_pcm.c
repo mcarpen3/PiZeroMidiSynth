@@ -250,3 +250,10 @@ void synth_pcm_shutdown() {
     snd_pcm_close(pcm_handle);
 }
 
+unsigned int synth_pcm_max_sample() {
+    return max_sample_val;
+}
+
+unsigned int synth_pcm_channels() {
+    return channels;
+}

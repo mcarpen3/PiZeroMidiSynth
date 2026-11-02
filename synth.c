@@ -44,6 +44,10 @@ static int synth_init() {
         record_samples = 0;
         return 0;
     }
+    if ((out_file = fopen(out_filename, "wb")) == NULL) {
+        record_samples = 0;
+        return 0;
+    }
     return 0;
 }
 
@@ -64,6 +68,8 @@ void *midi_evt_handler(void *arg) {
     Voice *cur_voice;
     short *samples = synth_pcm_samples();
     long period_size = synth_pcm_period_size();
+    unsigned int max_sample_val = synth_pcm_max_sample();
+    size_t pcm_byte_count;
 
     while(1) {
         MidiEvent me;
@@ -156,14 +162,23 @@ void *midi_evt_handler(void *arg) {
         if (record_samples) {
             if ((rc = synth_lame_encode_buffer(synth_pcm_samples())) < 0) {
                 fprintf(stderr, "ERROR: lame_encode_buffer %d\n", rc);
+                continue;
+            } 
+            if ((rc = fwrite((void *)synth_lame_mp3_buffer(), sizeof(unsigned char), rc, out_file)) < 0) {
+                fprintf(stderr, "ERROR: fwrite lame buffer %d\n", rc);
             }
         }
 
     }
     printf("freq_handler freed resources\n");
     dlist_destroy(list);
-    if (record_samples)
-        synth_lame_recording_end();
+    if (record_samples) {
+        if ((rc = synth_lame_recording_flush()) > 0) {
+            fwrite((void *)synth_lame_mp3_buffer(), sizeof(unsigned char), rc, out_file);
+        }
+        synth_lame_close();
+        fclose(out_file);
+    }
     return NULL;
 }
 

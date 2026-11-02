@@ -42,9 +42,11 @@ int synth_pcm_set_swparams(snd_pcm_t *handle, snd_pcm_sw_params_t *params);
 int synth_pcm_xrun_recovery(int err);
 int synth_pcm_write();
 void synth_pcm_sample(int idx, signed short sample);
-
 short *synth_pcm_samples();
 snd_pcm_sframes_t synth_pcm_period_size();
+unsigned int synth_pcm_max_sample();
+unsigned int synth_pcm_channels();
+
 
 static signed short *samples;
 static snd_output_t *output = NULL;

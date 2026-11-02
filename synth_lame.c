@@ -26,27 +26,25 @@ int synth_lame_codec_configure(long period_size, int channels) {
     return 0;
 }
 
-void synth_lame_recording_end() {
+int synth_lame_recording_flush() {
+    return lame_encode_flush(lame_flags, mp3_buf, mp3_buf_sz);
+}
+
+void synth_lame_close() {
     int rc;
-    if ((rc = lame_encode_flush(lame_flags, mp3_buf, mp3_buf_sz)) > 0) {
-        fwrite((void *)mp3_buf, sizeof(unsigned char), mp3_buf_sz, out_file);
-    }
-
-    fclose(out_file);
-
     if ((rc = lame_close(lame_flags)) != 0) {
-        fprintf(stderr, "ERROR: lame_close %d\n", rc);
+        fprintf(stderr, "ERROR: synth_lame_close %d\n", rc);
     }
 
     free(mp3_buf);
-    printf("INFO: lame_recording_end COMPLETE\n");
+    printf("INFO: synth_lame_close COMPLETE\n");
+    return;
 }
 
 int synth_lame_encode_buffer(short *buffer) {
-    int err;
-    if ((err = lame_encode_buffer (lame_flags, buffer, NULL, synth_lame_period_size, mp3_buf, mp3_buf_sz)) < 0) {
-        return -1;
-    }
-    fwrite((void *)mp3_buf, sizeof(unsigned char), err, out_file); 
+    return lame_encode_buffer (lame_flags, buffer, NULL, synth_lame_period_size, mp3_buf, mp3_buf_sz);
 }
 
+unsigned char *synth_lame_mp3_buffer() {
+    return mp3_buf;
+}

@@ -16,6 +16,7 @@
 - <a href="https://www.m-audio.com/keyboard-controllers/keystation-61-mk3.html" target="_blank" rel="noopener noreferrer">My Midi Keyboard</a>
 - <a href="https://www.raspberrypi.com/products/codec-zero/" target="_blank" rel="noopener noreferrer">Audio HAT</a>
 - ![MySetup](./Setup.jpg)
+- ![Sample](./recording.mp3)
 - ADSR (attack, decay, sustain, release) implemented linearly
 - TODO
   - Recording and loop playback

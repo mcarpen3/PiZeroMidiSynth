@@ -2,10 +2,9 @@
 #define SYNTH_H
 
 #include <stdbool.h>
-#include <stddef.h>
-#include <lame/lame.h>
 #include <inttypes.h>
 #include <math.h>
+#include "stdio.h"
 
 static int verbose = 1;
 static int midi_note_a = 69;
@@ -23,8 +22,9 @@ static double tempo_step;
 static double sustain_gain = 0.7;
 static double max_gain = 1.;
 static double min_gain = 0.;
-static int record_samples = 0;
-
+static int record_samples = 1;
+static FILE *out_file;
+static const char *out_filename = "./recording.mp3";
 
 typedef enum {
     NOTE_ON,
