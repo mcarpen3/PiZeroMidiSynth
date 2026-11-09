@@ -1,26 +1,29 @@
-BUILD_DIR=build/
+SHELL=/bin/bash
 
-seqsynth: main.c synth.o synth_lame.o synth_pcm.o spsc_ring_buffer.o dlist.o
-	gcc -ggdb -Wall -Wextra -Wno-unused-variable -o $(BUILD_DIR)seqsynth main.c \
-		$(BUILD_DIR)synth.o $(BUILD_DIR)synth_pcm.o $(BUILD_DIR)synth_lame.o $(BUILD_DIR)spsc_ring_buffer.o $(BUILD_DIR)dlist.o -lasound -pthread -lm -lmp3lame
+CC        := gcc
+SRC_DIR   := src
+INC_DIR   := include
 
-synth.o: synth.c synth.h
-	gcc -ggdb -c synth.c -o $(BUILD_DIR)synth.o
-synth_pcm.o: synth_pcm.c synth_pcm.h
-	gcc -c synth_pcm.c -o $(BUILD_DIR)synth_pcm.o
-synth_lame.o: synth_lame.c synth_lame.h
-	gcc -c synth_lame.c -o $(BUILD_DIR)synth_lame.o
-spsc_ring_buffer.o: spsc_ring_buffer.c
-	gcc -c spsc_ring_buffer.c -o $(BUILD_DIR)spsc_ring_buffer.o
-dlist.o: DList/dlist.c DList/dlist.h
-	gcc -c DList/dlist.c -o $(BUILD_DIR)dlist.o
+BUILD_DIR := build
+TARGET := seqsynth
+SRCS   := $(shell find $(SRC_DIR) -name '*.c')
+OBJS   := $(SRCS:%=$(BUILD_DIR)/%.o)
+LIBS   := -lmp3lame -lasound -lm -pthread
+
+CFLAGS    := -Wall -Wextra -Iinclude
+
+.PHONY: all clean
+
+$(BUILD_DIR)/$(TARGET): $(OBJS)
+	$(CC) $(CFLAGS) -o $(BUILD_DIR)/$(TARGET) main.c $(OBJS) $(LIBS)
+
+$(BUILD_DIR)/%.c.o: %.c
+	mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -c $< -o $@ $(LIBS)
+
 clean:
-	rm $(BUILD_DIR)*
-build_n_run: seqsynth
-	build/seqsynth
-run: 
-	build/seqsynth $(ARGS)
-debug:
-	gdb build/seqsynth
-playback: synth_pcm.o synth_lame.o
-	gcc -o build/playback $(BUILD_DIR)synth_pcm.o $(BUILD_DIR)synth_lame.o playback.c -lasound -lmp3lame
+	rm -rf $(BUILD_DIR)
+
+playback: $(BUILD_DIR)/synth_pcm.o $(BUILD_DIR)/synth_lame.o
+	gcc -o $(BIN_DIR)/playback $(BUILD_DIR)/synth_pcm.o $(BUILD_DIR)/synth_lame.o playback.c -lasound -lmp3lame
+
