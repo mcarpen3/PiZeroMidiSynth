@@ -32,11 +32,15 @@ int synth_lame_recording_flush() {
 
 void synth_lame_close() {
     int rc;
+    if (lame_flags == NULL)
+        return;
     if ((rc = lame_close(lame_flags)) != 0) {
         fprintf(stderr, "ERROR: synth_lame_close %d\n", rc);
     }
+    lame_flags = NULL;
 
     free(mp3_buf);
+    mp3_buf = NULL;
     printf("INFO: synth_lame_close COMPLETE\n");
     return;
 }

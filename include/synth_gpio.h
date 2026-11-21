@@ -2,6 +2,7 @@
 #define SYNTH_RECORDER_H
 #include <stdatomic.h>
 #include <stdbool.h>
+#include <signal.h>
 
 enum gpio_profile_type {
     GPIO_PROFILE_INPUT,
@@ -15,11 +16,12 @@ typedef struct gpio_profile_ {
     int fd;
 } gpio_profile; 
 
-volatile sig_atomic_t stop = 0;
-atomic_bool record;
-atomic_bool recording;
+atomic_bool synth_gpio_record_pressed;
+atomic_bool synth_gpio_recording;
+atomic_bool synth_gpio_join;
 bool previous_recording_state;
 void synth_gpio_init();
-int verbose = 1;
+void *handle_gpio_events(void *arg); // thread
+double long_press_dur_secs;
 
 #endif // SYNTH_RECORDER_H

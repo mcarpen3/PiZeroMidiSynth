@@ -24,7 +24,7 @@ static double max_gain = 1.;
 static double min_gain = 0.;
 static int record_samples = 1;
 static FILE *out_file;
-static const char *out_filename = "./recording.mp3";
+static char out_filename[128];
 
 typedef enum {
     NOTE_ON,

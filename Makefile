@@ -10,20 +10,22 @@ SRCS   := $(shell find $(SRC_DIR) -name '*.c')
 OBJS   := $(SRCS:%=$(BUILD_DIR)/%.o)
 LIBS   := -lmp3lame -lasound -lm -pthread
 
-CFLAGS    := -Wall -Wextra -Iinclude
+CFLAGS    := -Wall -Wextra -Wno-unused-variable -Wno-unused-parameter -Wno-unused-function -Iinclude
 
 .PHONY: all clean
 
 $(BUILD_DIR)/$(TARGET): $(OBJS)
 	$(CC) $(CFLAGS) -o $(BUILD_DIR)/$(TARGET) main.c $(OBJS) $(LIBS)
 
-$(BUILD_DIR)/%.c.o: %.c
-	mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) -c $< -o $@ $(LIBS)
-
 clean:
 	rm -rf $(BUILD_DIR)
 
-playback: $(BUILD_DIR)/synth_pcm.o $(BUILD_DIR)/synth_lame.o
-	gcc -o $(BIN_DIR)/playback $(BUILD_DIR)/synth_pcm.o $(BUILD_DIR)/synth_lame.o playback.c -lasound -lmp3lame
+# Testing lame mp3 decoding and pcm playback
+$(BUILD_DIR)/playback: tests/playback.c $(BUILD_DIR)/src/synth_pcm.c.o $(BUILD_DIR)/src/synth_lame.c.o
+	$(CC) $(CFLAGS) -o $(BUILD_DIR)/playback tests/playback.c $(BUILD_DIR)/src/synth_pcm.c.o $(BUILD_DIR)/src/synth_lame.c.o -lasound -lmp3lame
+
+# Build rules for object files
+$(BUILD_DIR)/%.c.o: %.c
+	mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -c $< -o $@ $(LIBS)
 
